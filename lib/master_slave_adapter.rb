@@ -81,15 +81,6 @@ module ActiveRecord
 
   module ConnectionAdapters
 
-    class AbstractAdapter
-      alias_method :orig_log_info, :log_info
-      def log_info(sql, name, ms)
-        connection_name =
-          [ @config[:name], @config[:host], @config[:port] ].compact.join(":")
-        orig_log_info sql, "[#{connection_name}] #{name || 'SQL'}", ms
-      end
-    end
-
     class MasterSlaveAdapter < AbstractAdapter
 
       class Clock
@@ -118,14 +109,12 @@ module ActiveRecord
         end
       end
 
-      checkout :active?
-
       def initialize(config, logger)
         super(nil, logger)
 
         @connections = {}
         @connections[:master] = connect(config.fetch(:master), :master)
-        @connections[:slaves] = config.fetch(:slaves).map { |cfg| connect(cfg, :slave) }
+        @connections[:slaves] = config.fetch(:slaves, []).map { |cfg| connect(cfg, :slave) }
 
         @disable_connection_test = config.delete(:disable_connection_test) == 'true'
 

@@ -168,10 +168,10 @@ module ActiveRecord
           ActiveRecord::Base.with_consistency(clock, &blk)
         end
         def reset!
-          Thread.current[:master_slave_clock]      =
-          Thread.current[:master_slave_connection] =
-          Thread.current[:on_commit_callbacks]     =
-          Thread.current[:on_rollback_callbacks]   =
+          @current_clock = nil
+          @connection_stack = nil
+          @on_commit_callbacks = nil
+          @on_rollback_callbacks = nil
           nil
         end
       end
@@ -322,11 +322,11 @@ module ActiveRecord
       end
 
       def current_clock
-        Thread.current[:master_slave_clock]
+        @current_clock
       end
 
       def current_clock=(clock)
-        Thread.current[:master_slave_clock] = clock
+        @current_clock = clock
       end
 
       def master_clock
@@ -398,15 +398,15 @@ module ActiveRecord
       end
 
       def connection_stack
-        Thread.current[:master_slave_connection] ||= []
+        @connection_stack ||= []
       end
 
       def on_commit_callbacks
-        Thread.current[:on_commit_callbacks] ||= []
+        @on_commit_callbacks ||= []
       end
 
       def on_rollback_callbacks
-        Thread.current[:on_rollback_callbacks] ||= []
+        @on_rollback_callbacks ||= []
       end
 
       def get_last_seen_slave_clock(conn)

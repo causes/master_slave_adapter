@@ -334,6 +334,11 @@ module ActiveRecord
         if status = conn.uncached { conn.select_one("SHOW MASTER STATUS") }
           Clock.new(status['File'], status['Position'])
         end
+      rescue ActiveRecord::StatementInvalid
+        # Don't allow database permissions (eg. "ActiveRecord::StatementInvalid:
+        # Mysql::Error: Access denied; you need the SUPER,REPLICATION CLIENT
+        # privilege for this operation: SHOW MASTER STATUS") to prevent the
+        # adapter from working.
       end
 
       def slave_clock(conn)

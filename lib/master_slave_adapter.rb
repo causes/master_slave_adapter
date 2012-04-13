@@ -264,7 +264,7 @@ module ActiveRecord
       delegate :tables,         # commented in SchemaStatements
                :truncate_table, # monkeypatching database_cleaner gem
                :primary_key,    # is Base#primary_key meant to be the contract?
-               :vistor,
+               :visitor,
                :to => :master_connection
       # ok, we might have missed more
       def method_missing(name, *args, &blk)

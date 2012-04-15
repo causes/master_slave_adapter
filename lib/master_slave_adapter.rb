@@ -257,6 +257,7 @@ module ActiveRecord
                :update_sql,
                :delete_sql,
                :sanitize_limit,
+               :disable_referential_integrity,
                :to => :master_connection
       delegate *(ActiveRecord::ConnectionAdapters::SchemaStatements.instance_methods + [{
                :to => :master_connection }])

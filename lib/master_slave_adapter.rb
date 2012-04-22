@@ -81,6 +81,15 @@ module ActiveRecord
 
   module ConnectionAdapters
 
+    class AbstractAdapter
+      alias_method :orig_log, :log
+      def log(sql, name = "SQL", binds = [], &block)
+        connection_name =
+          [ @config[:name], @config[:host], @config[:port] ].compact.join(":")
+        orig_log sql, "[#{connection_name}] #{name || 'SQL'}", binds, &block
+      end
+    end
+
     class MasterSlaveAdapter < AbstractAdapter
 
       class Clock

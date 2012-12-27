@@ -33,7 +33,6 @@ module ActiveRecord
       end
 
       def master_slave_connection(config)
-        config  = massage(config)
         adapter = config.fetch(:connection_adapter)
         name    = "#{adapter}_master_slave"
 
@@ -42,18 +41,6 @@ module ActiveRecord
       end
 
     private
-
-      def massage(config)
-        config = config.symbolize_keys
-        skip = [ :adapter, :connection_adapter, :master, :slaves ]
-        defaults = config.
-          reject { |k,_| skip.include?(k) }.
-          merge(:adapter => config.fetch(:connection_adapter))
-        ([config.fetch(:master)] + config.fetch(:slaves, [])).map do |cfg|
-          cfg.symbolize_keys!.reverse_merge!(defaults)
-        end
-        config
-      end
 
       def load_adapter(adapter_name)
         unless respond_to?("#{adapter_name}_connection")
@@ -100,7 +87,7 @@ module ActiveRecord
       def initialize(config, logger)
         super(nil, logger)
 
-        @config = config
+        @config = massage(config)
         @connections = {}
         @connections[:master] = connect_to_master
         @connections[:slaves] = @config.fetch(:slaves).map { |cfg| connect(cfg, :slave) }
@@ -492,6 +479,21 @@ module ActiveRecord
       def circuit
         @circuit
       end
+
+    private
+
+      def massage(config)
+        config = config.symbolize_keys
+        skip = [ :adapter, :connection_adapter, :master, :slaves ]
+        defaults = config.
+          reject { |k,_| skip.include?(k) }.
+          merge(:adapter => config.fetch(:connection_adapter))
+        ([config.fetch(:master)] + config.fetch(:slaves, [])).map do |cfg|
+          cfg.symbolize_keys!.reverse_merge!(defaults)
+        end
+        config
+      end
+
     end
   end
 end

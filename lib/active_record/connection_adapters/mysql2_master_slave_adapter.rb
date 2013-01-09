@@ -1,6 +1,4 @@
 require 'active_record/connection_adapters/master_slave_adapter'
-require 'active_record/connection_adapters/master_slave_adapter/clock'
-require 'active_record/connection_adapters/master_slave_adapter/shared_mysql_adapter_behavior'
 require 'active_record/connection_adapters/mysql2_adapter'
 require 'mysql2'
 
@@ -14,7 +12,6 @@ module ActiveRecord
   module ConnectionAdapters
     class Mysql2MasterSlaveAdapter < AbstractAdapter
       include MasterSlaveAdapter
-      include SharedMysqlAdapterBehavior
 
     private
 

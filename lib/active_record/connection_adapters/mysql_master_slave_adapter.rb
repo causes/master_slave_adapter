@@ -1,5 +1,4 @@
 require 'active_record/connection_adapters/master_slave_adapter'
-require 'active_record/connection_adapters/master_slave_adapter/shared_mysql_adapter_behavior'
 require 'active_record/connection_adapters/mysql_adapter'
 require 'mysql'
 
@@ -13,7 +12,6 @@ module ActiveRecord
   module ConnectionAdapters
     class MysqlMasterSlaveAdapter < AbstractAdapter
       include MasterSlaveAdapter
-      include SharedMysqlAdapterBehavior
 
     private
 

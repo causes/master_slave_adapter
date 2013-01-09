@@ -1,13 +1,18 @@
 require 'active_record'
 require 'active_record/connection_adapters/abstract_adapter'
 require 'active_record/connection_adapters/master_slave_adapter/circuit_breaker'
+require 'active_record/connection_adapters/master_slave_adapter/clocks/default_clock'
+require 'active_record/connection_adapters/master_slave_adapter/clocks/heartbeat_clock'
+require 'active_record/connection_adapters/master_slave_adapter/lag_strategies/default_strategy'
+require 'active_record/connection_adapters/master_slave_adapter/lag_strategies/relaxed_strategy'
+require 'active_record/connection_adapters/master_slave_adapter/lag_strategies/strict_strategy'
 
 module ActiveRecord
   class MasterUnavailable < ConnectionNotEstablished; end
 
   class Base
     class << self
-      def with_consistency(clock, &blk)
+      def with_consistency(clock = nil, &blk)
         if connection.respond_to? :with_consistency
           connection.with_consistency(clock, &blk)
         else
@@ -89,11 +94,16 @@ module ActiveRecord
 
         @config = massage(config)
         @connections = {}
+        @clock_context = {}
+
+        setup_clock_implementation
+        setup_lag_strategy
+
         @connections[:master] = connect_to_master
         @connections[:slaves] = @config.fetch(:slaves).map { |cfg| connect(cfg, :slave) }
-        @last_seen_slave_clocks = {}
         @disable_connection_test = @config[:disable_connection_test] == 'true'
         @circuit = CircuitBreaker.new(logger)
+
 
         self.current_connection = slave_connection!
       end
@@ -108,11 +118,7 @@ module ActiveRecord
         with(slave_connection!) { yield }
       end
 
-      def with_consistency(clock)
-        if clock.nil?
-          raise ArgumentError, "consistency must be a valid comparable value"
-        end
-
+      def with_consistency(clock = nil)
         # try random slave, else fall back to master
         slave = slave_connection!
         conn =
@@ -123,8 +129,17 @@ module ActiveRecord
           end
 
         with(conn) { yield }
+      end
 
-        current_clock || clock
+      def on_write
+        with(master_connection) do |conn|
+          yield(conn).tap do
+            unless open_transaction?
+              # keep using master after write
+              connection_stack.replace([ conn ])
+            end
+          end
+        end
       end
 
       def on_commit(&blk)
@@ -359,18 +374,6 @@ module ActiveRecord
         connection_stack.first
       end
 
-      def current_clock
-        @master_slave_clock
-      end
-
-      def master_clock
-        raise NotImplementedError
-      end
-
-      def slave_clock(conn)
-        raise NotImplementedError
-      end
-
     protected
 
       def open_transaction?
@@ -393,19 +396,16 @@ module ActiveRecord
         @connections[:master] = nil
       end
 
-      def slave_consistent?(conn, clock)
-        if @last_seen_slave_clocks[conn].try(:>=, clock)
-          true
-        elsif (slave_clk = slave_clock(conn))
-          @last_seen_slave_clocks[conn] = clock
-          slave_clk >= clock
-        else
-          false
-        end
+      def current_clock
+        @master_slave_clock
       end
 
       def current_clock=(clock)
         @master_slave_clock = clock
+      end
+
+      def slave_consistent?(*args)
+        raise NotImplementedError
       end
 
       def connection_stack
@@ -414,22 +414,6 @@ module ActiveRecord
 
       def current_connection=(conn)
         connection_stack.unshift(conn)
-      end
-
-      def on_write
-        with(master_connection) do |conn|
-          yield(conn).tap do
-            unless open_transaction?
-              master_clk = master_clock
-              unless current_clock.try(:>=, master_clk)
-                self.current_clock = master_clk
-              end
-
-              # keep using master after write
-              connection_stack.replace([ conn ])
-            end
-          end
-        end
       end
 
       def with(connection)
@@ -482,6 +466,28 @@ module ActiveRecord
 
     private
 
+      def setup_clock_implementation
+        clock_implementation = @config.fetch(:clock_implementation, 'DefaultClock')
+        case clock_implementation
+        when 'HeartbeatClock'
+          self.class.send(:include, Clocks::HeartbeatClock)
+        else
+          self.class.send(:include, Clocks::DefaultClock)
+        end
+      end
+
+      def setup_lag_strategy
+        lag_strategy = @config.fetch(:lag_strategy, 'DefaultStrategy')
+        case lag_strategy
+        when 'RelaxedStrategy'
+          self.class.send(:include, LagStrategies::RelaxedStrategy)
+        when 'StrictStrategy'
+          self.class.send(:include, LagStrategies::StrictStrategy)
+        else
+          self.class.send(:include, LagStrategies::DefaultStrategy)
+        end
+      end
+
       def massage(config)
         config = config.symbolize_keys
         skip = [ :adapter, :connection_adapter, :master, :slaves ]
@@ -493,7 +499,6 @@ module ActiveRecord
         end
         config
       end
-
     end
   end
 end

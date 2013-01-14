@@ -2,7 +2,7 @@ require 'active_record/connection_adapters/master_slave_adapter/clock'
 
 Clock = ActiveRecord::ConnectionAdapters::MasterSlaveAdapter::Clock
 
-shared_examples_for 'mysql consistency' do
+shared_examples_for 'DefaultClock consistency' do
   def zero
     Clock.zero
   end

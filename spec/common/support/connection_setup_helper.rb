@@ -10,6 +10,8 @@ shared_context 'connection setup' do
       :username => 'root',
       :database => 'slave',
       :connection_adapter => connection_adapter,
+      :clock_implementation => clock_implementation,
+      :lag_strategy => lag_strategy,
       :master => { :username => 'root', :database => 'master' },
       :slaves => [{ :database => 'slave' }],
     }

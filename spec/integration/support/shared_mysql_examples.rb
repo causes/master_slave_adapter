@@ -7,6 +7,8 @@ shared_examples_for "a MySQL MasterSlaveAdapter" do
     {
       :adapter => 'master_slave',
       :connection_adapter => connection_adapter,
+      :clock_implementation => clock_implementation,
+      :lag_strategy => lag_strategy,
       :username => 'root',
       :database => 'master_slave_adapter',
       :master => {
@@ -98,68 +100,6 @@ shared_examples_for "a MySQL MasterSlaveAdapter" do
     end
   end
 
-  context "when asked for consistency" do
-    context "given slave is fully synced" do
-      before do
-        wait_for_replication_sync
-      end
-
-      it "reads from slave" do
-        ActiveRecord::Base.with_consistency(connection.master_clock) do
-          should_read_from :slave
-        end
-      end
-    end
-
-    context "given slave lags behind" do
-      before do
-        stop_replication
-        move_master_clock
-      end
-
-      after do
-        start_replication
-      end
-
-      it "reads from master" do
-        ActiveRecord::Base.with_consistency(connection.master_clock) do
-          should_read_from :master
-        end
-      end
-
-      context "and slave catches up" do
-        before do
-          start_replication
-          wait_for_replication_sync
-        end
-
-        it "reads from slave" do
-          ActiveRecord::Base.with_consistency(connection.master_clock) do
-            should_read_from :slave
-          end
-        end
-      end
-    end
-
-    context "given we always wait for slave to catch up and be consistent" do
-      before do
-        start_replication
-      end
-
-      it "should always read from slave" do
-        wait_for_replication_sync
-        ActiveRecord::Base.with_consistency(connection.master_clock) do
-          should_read_from :slave
-        end
-        move_master_clock
-        wait_for_replication_sync
-        ActiveRecord::Base.with_consistency(connection.master_clock) do
-          should_read_from :slave
-        end
-      end
-    end
-  end
-
   context "given master goes away in between queries" do
     let(:query) { "INSERT INTO #{test_table} (message) VALUES ('test')" }
 
@@ -216,13 +156,11 @@ shared_examples_for "a MySQL MasterSlaveAdapter" do
     end
 
     context "when asked for slave" do
-      it "fails" do
+      it "returns the master" do
         expect do
-          ActiveRecord::Base.with_slave { should_read_from :slave }
-        end.to raise_error(ActiveRecord::StatementInvalid)
+          ActiveRecord::Base.with_slave { should_read_from :master }
+        end
       end
     end
-
   end
-
 end

@@ -23,10 +23,12 @@ module MysqlSetupHelper
   end
 
   def start_replication
+    start_heartbeat
     execute(:slave, "start slave")
   end
 
   def stop_replication
+    stop_heartbeat(:master)
     execute(:slave, "stop slave")
   end
 
@@ -35,14 +37,20 @@ module MysqlSetupHelper
   end
 
   def wait_for_replication_sync
+    stop_heartbeat(:master)
+    stop_heartbeat(:slave)
     Timeout.timeout(5) do
       until slave_status == master_status; end
     end
   rescue Timeout::Error
     raise "Replication synchronization failed"
+  ensure
+    start_heartbeat
   end
 
   def configure
+    stop_heartbeat(:master)
+    stop_heartbeat(:slave)
     execute(:master, <<-EOS)
       SET sql_log_bin = 0;
       create user 'slave'@'localhost' identified by 'slave';
@@ -89,6 +97,7 @@ module MysqlSetupHelper
 
   def stop_master
     stop(:master)
+    stop_heartbeat(:master)
   end
 
   def start_slave
@@ -97,6 +106,7 @@ module MysqlSetupHelper
 
   def stop_slave
     stop(:slave)
+    stop_heartbeat(:slave)
   end
 
 private
@@ -117,10 +127,23 @@ private
     system(%{mysql --protocol=TCP -P#{port(host)} -uroot -e "#{statement}"})
   end
 
+  def start_heartbeat
+    [:slave, :master].each do |name|
+      `rm -f /tmp/sentinel-#{name}`
+      `mysql --defaults-file=#{location(name)}/my.cnf -uroot -h 127.0.0.1 -e 'create database if not exists heartbeat' > /dev/null 2>&1`
+      $pipes["#{name}-heartbeat"] = IO.popen("pt-heartbeat --defaults-file=#{location(name)}/my.cnf --interval 0.05 --user root --host 127.0.0.1 -D heartbeat --create-table --insert-heartbeat-row --sentinel=/tmp/sentinel-#{name} --update --daemonize < /dev/null > /dev/null 2>&1")
+    end
+  end
+
+  def stop_heartbeat(name)
+    `touch /tmp/sentinel-#{name}`
+  end
+
   def start(name)
     $pipes ||= {}
     $pipes[name] = IO.popen("mysqld --defaults-file='#{location(name)}/my.cnf'")
     wait_for_database_boot(name)
+    start_heartbeat
   end
 
   def stop(name)
@@ -134,6 +157,7 @@ private
     # what we need here.
     mysqld_pid = `ps a | grep 'mysqld.*#{location(name)}/my.cnf' | grep -v grep | awk '{print $1}'`.to_i
     Process.kill("KILL", mysqld_pid) unless mysqld_pid.zero?
+    stop_heartbeat(name)
   ensure
     pipe.close unless pipe.closed?
   end
@@ -143,7 +167,7 @@ private
   end
 
   def wait_for_database_boot(host)
-    Timeout.timeout(5) do
+    Timeout.timeout(10) do
       until started?(host); sleep(0.1); end
     end
   rescue Timeout::Error
@@ -170,6 +194,10 @@ server-id               = #{server_id(name)}
 lower_case_table_names  = 1
 sql-mode                = ''
 replicate-ignore-db     = mysql
+slave-skip-errors       = all
+[client]
+port                    = #{port(name)}
+host                    = 127.0.0.1
     EOS
   end
 end

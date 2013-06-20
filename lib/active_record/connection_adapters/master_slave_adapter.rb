@@ -393,7 +393,13 @@ module ActiveRecord
       end
 
       def reset_master_connection
-        @connections[:master] = nil
+        begin
+          @connections[:master].reset!
+        rescue => ex
+          # We only want to log an error when the connection can't be reset!
+          # so we can raise the correct exception in `handle_error`.
+          @logger.try(:error, "unable to reconnect to master #{ex}")
+        end
       end
 
       def current_clock
@@ -454,7 +460,7 @@ module ActiveRecord
       def handle_error(connection, exception)
         if master_connection?(connection) && connection_error?(exception)
           reset_master_connection
-          raise MasterUnavailable
+          raise MasterUnavailable.new exception
         else
           raise exception
         end

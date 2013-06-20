@@ -23,9 +23,10 @@ shared_context 'connection setup' do
 
   let(:mocked_methods) do
     {
-      :reconnect!  => true,
-      :disconnect! => true,
       :active?     => true,
+      :disconnect! => true,
+      :reconnect!  => true,
+      :reset!      => true,
     }
   end
 

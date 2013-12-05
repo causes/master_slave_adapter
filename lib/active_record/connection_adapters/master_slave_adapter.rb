@@ -302,6 +302,7 @@ module ActiveRecord
       rescued_delegate :tables,         # commented in SchemaStatements
                        :truncate_table, # monkeypatching database_cleaner gem
                        :primary_key,    # is Base#primary_key meant to be the contract?
+                       :exec_query,
                        :to => :master_connection
       # No need to be so picky about these methods
       rescued_delegate :add_limit_offset!, # DatabaseStatements

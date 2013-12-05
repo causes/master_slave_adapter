@@ -266,6 +266,7 @@ module ActiveRecord
                        :update_sql,
                        :delete_sql,
                        :visitor,
+                       :disable_referential_integrity,
                        :to => :master_connection
       # schema statements
       rescued_delegate :table_exists?,
@@ -309,6 +310,7 @@ module ActiveRecord
                        :add_lock!, #DatabaseStatements
                        :columns,
                        :table_alias_for,
+                       :indexes,
                        :to => :prefer_master_connection
 
       # === determine read connection
